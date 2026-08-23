@@ -6,6 +6,7 @@ use crate::telegram;
 
 use std::path::PathBuf;
 
+use jiff::tz::TimeZone;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 
@@ -104,22 +105,47 @@ impl Daemon {
                 text: "egressd is running.".into(),
             }),
             CommandAction::NotifyLeft { source_id: _ } => {
-                self.notify_targets("The user left.").await;
+                let success_count = self.notify_targets(&self.departure_message()).await;
+
+                let success = success_count == self.config.targets.len();
+                let text = format!(
+                    "{} of {} targets sucessfully notified.",
+                    success_count,
+                    self.config.targets.len()
+                );
+
                 Ok(ResponseProtocol {
                     protocol_version: PROTOCOL_VER_MAX,
-                    success: true,
-                    text: "message sent (I think).".to_string(),
+                    success,
+                    text,
                 })
             }
             _ => todo!(),
         }
     }
 
+    fn departure_message(&self) -> String {
+        let now = jiff::Timestamp::now().to_zoned(TimeZone::system());
+        let user = match &self.config.user_name {
+            Some(name) => name,
+            None => "user",
+        };
+
+        format!(
+            "[{}]: {user} is departing",
+            now.strftime("%A, %B %-d, %Y %H:%M:%S")
+        )
+    }
+
     /// Sends a message to all Telegram chats in the user's config.
-    async fn notify_targets(&self, text: &str) {
+    #[must_use]
+    async fn notify_targets(&self, text: &str) -> usize {
+        let mut success_count = 0;
+
         for chat_id in &self.config.targets {
             match telegram::send_message(*chat_id, text).await {
                 Ok(message_id) => {
+                    success_count += 1;
                     if let Err(e) = self.database.record_message(*chat_id, message_id).await {
                         eprintln!("failed to store message: {e}")
                     }
@@ -127,6 +153,8 @@ impl Daemon {
                 Err(error) => eprintln!("failed to send message: {error}"),
             }
         }
+
+        return success_count;
     }
 
     /// Gets the path to the UNIX socket for the daemon.

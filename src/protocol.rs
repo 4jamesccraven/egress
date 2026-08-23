@@ -32,6 +32,15 @@ pub enum CommandAction {
     #[serde(rename = "status")]
     Status,
 
+    /// Gets information about the messages stored in the database.
+    /// Note: does _not_ store or list the message text.
+    #[serde(rename = "get_messages")]
+    GetMessages,
+
+    /// Deletes all managed messages.
+    #[serde(rename = "purge")]
+    Purge,
+
     /// I just like printing the GNU Public License blurb lmao
     #[serde(rename = "license")]
     License,

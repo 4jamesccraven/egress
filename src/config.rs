@@ -10,6 +10,8 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
+    /// Who's leaving.
+    pub user_name: Option<String>,
     /// A list of Telegram `chat_id`s to receive updates.
     pub targets: Vec<i64>,
     /// The bot token for use with Telegram's API.
