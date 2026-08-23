@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::error::ResultExt;
+use crate::error::{DaemonError, ExpectExt};
 use crate::protocol::{CommandAction, CommandProtocol, PROTOCOL_VER_MAX, ResponseProtocol};
 use crate::telegram;
 
@@ -7,8 +7,6 @@ use std::path::PathBuf;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
-
-pub type DaemonError = ();
 
 pub struct Daemon {
     config: Config,
@@ -19,7 +17,7 @@ impl Daemon {
     /// Initialises a new daemon. Not called externally; use `Daemon::run` instead.
     fn new() -> Result<Self, DaemonError> {
         Ok(Self {
-            config: Config::get(),
+            config: Config::load_config()?,
             socket: Self::init_connections()?,
         })
     }
@@ -29,10 +27,10 @@ impl Daemon {
         let socket_path = Self::socket_path();
 
         if std::path::Path::new(&socket_path).exists() {
-            std::fs::remove_file(&socket_path).unwrap();
+            std::fs::remove_file(&socket_path).responsible_expect("unable to remove stale socket");
         }
 
-        UnixListener::bind(socket_path).map_err(|_| ())
+        UnixListener::bind(socket_path).map_err(|_| DaemonError::ConnectionFailed)
     }
 
     /// Runs the Daemon. Listens for socket and http connections.
@@ -42,12 +40,18 @@ impl Daemon {
         loop {
             tokio::select! {
                 result = daemon.socket.accept() => {
-                    let (stream, _) = result.map_err(|_| ())?;
-                    daemon.handle_sock(stream).await?;
+                    match result {
+                        Ok((stream, _)) => {
+                            daemon.handle_sock(stream).await?;
+                        }
+                        Err(error) => {
+                            eprintln!("Warning: could not accept Unix socket connection: {error}");
+                        }
+                    }
                 }
 
                 _ = tokio::signal::ctrl_c() => {
-                    std::fs::remove_file(Self::socket_path()).unwrap();
+                    std::fs::remove_file(Self::socket_path()).responsible_expect("could not remove socket");
                     break;
                 }
             }
@@ -59,18 +63,23 @@ impl Daemon {
     /// Accepts connection from the daemon's UNIX socket.
     async fn handle_sock(&self, stream: UnixStream) -> Result<(), DaemonError> {
         let (reader, mut writer) = stream.into_split();
-
         let mut reader = BufReader::new(reader);
         let mut request = String::new();
 
-        reader.read_line(&mut request).await.unwrap();
-        let response = self.try_process_command(&request).await?;
+        // If reading fails, emit a warning and resume listening.
+        if let Err(error) = reader.read_line(&mut request).await {
+            eprintln!("warning: could not read from socket: {error}");
+            return Ok(());
+        }
 
-        let mut to_client =
-            serde_json::to_string(&response).responsible_expect("failed to deserialise response");
-        to_client.push_str("\n");
+        let response = self.try_process_command(&request).await?.to_serialized();
 
-        writer.write_all(to_client.as_bytes()).await.map_err(|_| ())
+        // Same as above if writing fails.
+        if let Err(error) = writer.write_all(response.as_bytes()).await {
+            eprintln!("warning: could not write to socket: {error}");
+        }
+
+        Ok(())
     }
 
     /// Accepts unvalidated protocol data from a client and validates it before dispatching relevant
@@ -79,7 +88,9 @@ impl Daemon {
         &self,
         raw_protocol: &str,
     ) -> Result<ResponseProtocol, DaemonError> {
-        let request: CommandProtocol = serde_json::from_str(raw_protocol).map_err(|_| ())?;
+        // Validate as JSON and as our protocol specifically.
+        let request: CommandProtocol =
+            serde_json::from_str(raw_protocol).map_err(|e| DaemonError::InvalidProtocol(e))?;
 
         match request.action {
             CommandAction::Status => Ok(ResponseProtocol {
@@ -95,10 +106,7 @@ impl Daemon {
                     text: "message sent (I think).".to_string(),
                 })
             }
-            a => {
-                eprintln!("Action \"{a:?}\" is not yet implemented");
-                Err(())
-            }
+            _ => todo!(),
         }
     }
 
@@ -112,7 +120,9 @@ impl Daemon {
     /// Gets the path to the UNIX socket for the daemon.
     pub fn socket_path() -> PathBuf {
         if cfg!(debug_assertions) {
-            dirs::runtime_dir().map(|p| p.join("egress.sock")).unwrap()
+            dirs::runtime_dir()
+                .map(|p| p.join("egress.sock"))
+                .responsible_expect("XDG_RUNTIME_DIR not set")
         } else {
             PathBuf::from("/run/egress.sock")
         }

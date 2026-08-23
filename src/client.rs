@@ -1,5 +1,5 @@
 use crate::cli::ClientCLI;
-use crate::error::ResultExt;
+use crate::error::ExpectExt;
 use crate::protocol::{CommandProtocol, ResponseProtocol};
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
