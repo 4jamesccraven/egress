@@ -117,8 +117,15 @@ impl Daemon {
 
     /// Sends a message to all Telegram chats in the user's config.
     async fn notify_targets(&self, text: &str) {
-        for chat in &self.config.targets {
-            telegram::send_message(*chat, text).await;
+        for chat_id in &self.config.targets {
+            match telegram::send_message(*chat_id, text).await {
+                Ok(message_id) => {
+                    if let Err(e) = self.database.record_message(*chat_id, message_id).await {
+                        eprintln!("failed to store message: {e}")
+                    }
+                }
+                Err(error) => eprintln!("failed to send message: {error}"),
+            }
         }
     }
 

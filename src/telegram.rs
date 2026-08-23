@@ -33,18 +33,18 @@ async fn api_call(endpoint: &str, json: &Value) -> Result<Value, TelegramError> 
     validate_api_response(response)
 }
 
-pub async fn send_message(chat_id: u64, text: &str) -> Result<u64, TelegramError> {
+pub async fn send_message(chat_id: i64, text: &str) -> Result<i64, TelegramError> {
     let body = json!({ "chat_id": chat_id, "text": text });
     let response = api_call("sendMessage", &body).await?;
 
     let message_id = response["result"]["message_id"]
-        .as_u64()
+        .as_i64()
         .ok_or(TelegramError::Unknown)?;
 
     Ok(message_id)
 }
 
-pub async fn delete_message(chat_id: u64, message_id: u64) -> Result<(), TelegramError> {
+pub async fn delete_message(chat_id: i64, message_id: i64) -> Result<(), TelegramError> {
     let body = json!({ "chat_id": chat_id, "message_id": message_id});
     api_call("deleteMessage", &body).await?;
 

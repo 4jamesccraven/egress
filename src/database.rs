@@ -32,6 +32,22 @@ impl Database {
         Ok(Self { pool })
     }
 
+    pub async fn record_message(&self, chat_id: i64, message_id: i64) -> Result<(), DaemonError> {
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_messages (chat_id, message_id, sent_at)
+            VALUES (?, ?, ?)
+            "#,
+        )
+        .bind(chat_id)
+        .bind(message_id)
+        .bind(jiff::Timestamp::now().as_second())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     pub fn database_path() -> PathBuf {
         let dir = if cfg!(debug_assertions) {
             dirs::data_dir()

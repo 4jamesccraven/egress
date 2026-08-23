@@ -11,7 +11,7 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     /// A list of Telegram `chat_id`s to receive updates.
-    pub targets: Vec<u64>,
+    pub targets: Vec<i64>,
     /// The bot token for use with Telegram's API.
     pub telegram_token: String,
 }
