@@ -6,5 +6,8 @@ use clap::Parser;
 #[tokio::main]
 async fn main() {
     let args = ClientCLI::parse();
-    Client::run(&args).await.unwrap();
+    if let Err(error) = Client::run(&args).await {
+        eprintln!("error: {error}");
+        std::process::exit(1);
+    }
 }

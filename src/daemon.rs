@@ -36,6 +36,7 @@ impl Daemon {
     /// Runs the Daemon. Listens for socket and http connections.
     pub async fn run() -> Result<(), DaemonError> {
         let daemon = Self::new()?;
+        eprintln!("egressd is running");
 
         loop {
             tokio::select! {

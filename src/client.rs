@@ -1,12 +1,10 @@
 use crate::cli::ClientCLI;
-use crate::error::ExpectExt;
+use crate::error::ClientError;
 use crate::protocol::{CommandProtocol, ResponseProtocol};
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
-
-pub type ClientError = ();
 
 pub struct Client;
 
@@ -27,27 +25,33 @@ impl Client {
 
     async fn connect_sock() -> Result<UnixStream, ClientError> {
         let sock_path = crate::daemon::Daemon::socket_path();
-        UnixStream::connect(&sock_path).await.map_err(|_| ())
+        UnixStream::connect(&sock_path)
+            .await
+            .map_err(ClientError::ConnectionFailed)
     }
 
     async fn write_payload(
         writer: &mut OwnedWriteHalf,
         protocol: CommandProtocol,
     ) -> Result<(), ClientError> {
-        let mut payload = serde_json::to_string(&protocol).map_err(|_| ())?;
-        payload.push_str("\n");
+        let payload = protocol.to_serialized();
 
-        writer.write_all(payload.as_bytes()).await.map_err(|_| ())
+        writer
+            .write_all(payload.as_bytes())
+            .await
+            .map_err(ClientError::WriteFailure)
     }
 
     async fn read_response(reader: &mut OwnedReadHalf) -> Result<String, ClientError> {
         let mut reader = BufReader::new(reader);
         let mut response = String::new();
-        reader.read_line(&mut response).await.map_err(|_| ())?;
-
-        let response: ResponseProtocol = serde_json::from_str(&response)
-            .responsible_expect("could not deserialise response from daemon");
-
-        Ok(response.text)
+        match reader.read_line(&mut response).await {
+            Ok(1..) => {
+                let response: ResponseProtocol = serde_json::from_str(&response)?;
+                Ok(response.text)
+            }
+            Ok(0) => Err(ClientError::NoResponse),
+            Err(e) => Err(ClientError::ReadFailure(e)),
+        }
     }
 }
