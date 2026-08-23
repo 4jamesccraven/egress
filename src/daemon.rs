@@ -52,6 +52,7 @@ impl Daemon {
                 }
 
                 _ = tokio::signal::ctrl_c() => {
+                    eprintln!("shutting down");
                     std::fs::remove_file(Self::socket_path()).responsible_expect("could not remove socket");
                     break;
                 }

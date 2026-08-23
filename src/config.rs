@@ -4,7 +4,6 @@ use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use dirs::config_dir;
 use serde::{Deserialize, Serialize};
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
@@ -33,9 +32,7 @@ impl Config {
     pub fn load_config() -> Result<Self, ConfigError> {
         let cfg_dir = match std::env::var("EGRESS_CONFIG_DIR") {
             Ok(path) => PathBuf::from(path),
-            Err(_) => config_dir()
-                .responsible_expect("XDG_CONFIG_HOME is not set")
-                .join("egress"),
+            Err(_) => Self::config_dir(),
         };
 
         let default_path = cfg_dir.join("config.toml");
@@ -56,6 +53,16 @@ impl Config {
             toml::from_str(&config_contents).map_err(ConfigError::from)
         } else {
             serde_json::from_str(&config_contents).map_err(ConfigError::from)
+        }
+    }
+
+    fn config_dir() -> PathBuf {
+        if cfg!(debug_assertions) {
+            dirs::config_dir()
+                .responsible_expect("XDG_CONFIG_HOME is not set")
+                .join("egress")
+        } else {
+            PathBuf::from("/etc/egress")
         }
     }
 }

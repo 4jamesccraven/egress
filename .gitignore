@@ -1,4 +1,2 @@
 /target
 /.direnv
-# This is for development only, do not use in production
-/secrets
