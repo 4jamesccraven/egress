@@ -13,6 +13,15 @@ pub enum DaemonError {
 
     #[error("could not connect to client")]
     ConnectionFailed,
+
+    #[error("{0}")]
+    DatabaseFailure(#[from] sqlx::Error),
+
+    #[error("{0}")]
+    MigrationFailure(#[from] sqlx::migrate::MigrateError),
+
+    #[error("filesystem error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -31,6 +40,21 @@ pub enum ConfigError {
 
     #[error("could not parse config.toml")]
     InvalidTOML(#[from] toml::de::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum TelegramError {
+    #[error("{0}")]
+    Network(#[from] reqwest::Error),
+
+    #[error("malformed response: {0}")]
+    MalformedResponse(#[from] serde_json::Error),
+
+    #[error("{0}")]
+    API(String),
+
+    #[error("unknown error")]
+    Unknown,
 }
 
 #[derive(Debug, thiserror::Error)]

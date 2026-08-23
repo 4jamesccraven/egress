@@ -15,6 +15,7 @@ path = "src/bin/client.rs"
 axum = "0.8.9"
 clap = { version = "4.6.6", features = ["derive"] }
 dirs = "6.0.0"
+jiff = "0.2.35"
 reqwest = { version = "0.13.4", features = ["json"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

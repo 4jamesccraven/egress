@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::database::Database;
 use crate::error::{DaemonError, ExpectExt};
 use crate::protocol::{CommandAction, CommandProtocol, PROTOCOL_VER_MAX, ResponseProtocol};
 use crate::telegram;
@@ -11,14 +12,16 @@ use tokio::net::{UnixListener, UnixStream};
 pub struct Daemon {
     config: Config,
     socket: UnixListener,
+    database: Database,
 }
 
 impl Daemon {
     /// Initialises a new daemon. Not called externally; use `Daemon::run` instead.
-    fn new() -> Result<Self, DaemonError> {
+    async fn new() -> Result<Self, DaemonError> {
         Ok(Self {
             config: Config::load_config()?,
             socket: Self::init_connections()?,
+            database: Database::new().await?,
         })
     }
 
@@ -35,7 +38,7 @@ impl Daemon {
 
     /// Runs the Daemon. Listens for socket and http connections.
     pub async fn run() -> Result<(), DaemonError> {
-        let daemon = Self::new()?;
+        let daemon = Self::new().await?;
         eprintln!("egressd is running");
 
         loop {

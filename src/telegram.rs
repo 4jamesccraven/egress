@@ -1,20 +1,52 @@
-use serde_json::json;
+use crate::error::TelegramError;
+use serde_json::{Value, json};
 
-pub async fn send_message(chat_id: u64, text: &str) {
+pub fn validate_api_response(response: Value) -> Result<Value, TelegramError> {
+    match response["ok"].as_bool() {
+        Some(true) => Ok(response),
+
+        Some(false) => match response["description"].as_str() {
+            Some(why) => Err(TelegramError::API(why.into())),
+            None => Err(TelegramError::Unknown),
+        },
+        None => return Err(TelegramError::Unknown),
+    }
+}
+
+async fn api_call(endpoint: &str, json: &Value) -> Result<Value, TelegramError> {
     let cfg = crate::config::Config::get();
-    let body = json!({ "chat_id": chat_id, "text": text });
 
     let response = reqwest::Client::new()
         .post(format!(
-            "https://api.telegram.org/bot{}/sendMessage",
-            cfg.telegram_token,
+            "https://api.telegram.org/bot{}/{}",
+            cfg.telegram_token, endpoint
         ))
-        .json(&body)
+        .json(json)
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     if !response.status().is_success() {
-        eprintln!("telegram response: {}", response.text().await.unwrap());
+        eprintln!("warning: got bad response: {}", response.status())
     }
+
+    let response: Value = response.json().await?;
+    validate_api_response(response)
+}
+
+pub async fn send_message(chat_id: u64, text: &str) -> Result<u64, TelegramError> {
+    let body = json!({ "chat_id": chat_id, "text": text });
+    let response = api_call("sendMessage", &body).await?;
+
+    let message_id = response["result"]["message_id"]
+        .as_u64()
+        .ok_or(TelegramError::Unknown)?;
+
+    Ok(message_id)
+}
+
+pub async fn delete_message(chat_id: u64, message_id: u64) -> Result<(), TelegramError> {
+    let body = json!({ "chat_id": chat_id, "message_id": message_id});
+    api_call("deleteMessage", &body).await?;
+
+    Ok(())
 }
