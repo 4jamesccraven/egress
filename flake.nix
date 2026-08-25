@@ -23,6 +23,7 @@
             cargo
             libgcc
             rustc
+            clippy
 
             socat
             sqlite

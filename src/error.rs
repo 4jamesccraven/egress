@@ -1,5 +1,3 @@
-use std::panic::Location;
-
 #[derive(Debug, thiserror::Error)]
 pub enum DaemonError {
     #[error("{0}")]
@@ -22,6 +20,9 @@ pub enum DaemonError {
 
     #[error("filesystem error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("{0}")]
+    Telegram(#[from] TelegramError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -51,7 +52,7 @@ pub enum TelegramError {
     MalformedResponse(#[from] serde_json::Error),
 
     #[error("{0}")]
-    API(String),
+    Api(String),
 
     #[error("unknown error")]
     Unknown,

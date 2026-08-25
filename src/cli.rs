@@ -17,13 +17,22 @@ pub struct ClientCLI {
 pub enum ClientCommands {
     Status,
     Notify,
+    Purge {
+        #[arg(long, short)]
+        immediate: bool,
+    },
+    Messages,
 }
 
-impl Into<CommandProtocol> for ClientCommands {
-    fn into(self) -> CommandProtocol {
-        match self {
-            ClientCommands::Status => CommandAction::Status.to_protocol(),
-            ClientCommands::Notify => CommandAction::NotifyLeft { source_id: None }.to_protocol(),
-        }
+impl From<ClientCommands> for CommandProtocol {
+    fn from(val: ClientCommands) -> Self {
+        let action = match val {
+            ClientCommands::Status => CommandAction::Status,
+            ClientCommands::Notify => CommandAction::NotifyLeft { source_id: None },
+            ClientCommands::Purge { immediate } => CommandAction::Purge { immediate },
+            ClientCommands::Messages => CommandAction::GetMessages,
+        };
+
+        action.into()
     }
 }

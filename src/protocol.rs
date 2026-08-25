@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::telegram::TelegramMessage;
+
 pub const PROTOCOL_VER_MAX: u8 = 1;
 
 /// Describes JSON protocol that is passed via sockets and http connections.
@@ -38,18 +40,18 @@ pub enum CommandAction {
 
     /// Deletes all managed messages.
     #[serde(rename = "purge")]
-    Purge,
+    Purge { immediate: bool },
 
     /// I just like printing the GNU Public License blurb lmao
     #[serde(rename = "license")]
     License,
 }
 
-impl CommandAction {
-    pub fn to_protocol(&self) -> CommandProtocol {
+impl From<CommandAction> for CommandProtocol {
+    fn from(action: CommandAction) -> Self {
         CommandProtocol {
             protocol_version: PROTOCOL_VER_MAX,
-            action: self.to_owned(),
+            action,
         }
     }
 }
@@ -59,7 +61,9 @@ impl CommandAction {
 pub struct ResponseProtocol {
     pub protocol_version: u8,
     pub success: bool,
-    pub text: String,
+
+    #[serde(flatten)]
+    pub data: ResponseData,
 }
 
 impl ResponseProtocol {
@@ -68,5 +72,56 @@ impl ResponseProtocol {
             .expect("ResponseProtocol can always be serialized as JSON");
         s.push('\n');
         s
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "actiom")]
+pub enum ResponseData {
+    NotifyLeft {
+        success_count: usize,
+        total: usize,
+    },
+    Status {
+        text: String,
+    },
+    GetMessages {
+        messages: Vec<TelegramMessage>,
+    },
+    Purge {
+        /// Number of successfully deleted messages.
+        success_count: usize,
+        /// Messages that failed to delete and why.
+        failure: Vec<PurgeFailure>,
+        /// Other errors.
+        error: Option<String>,
+    },
+    License(String),
+}
+
+impl ResponseData {
+    pub fn to_protocol(self, success: bool) -> ResponseProtocol {
+        ResponseProtocol {
+            protocol_version: PROTOCOL_VER_MAX,
+            success,
+            data: self,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PurgeFailure {
+    pub chat_id: i64,
+    pub message_id: i64,
+    pub error: String,
+}
+
+impl From<(TelegramMessage, String)> for PurgeFailure {
+    fn from(value: (TelegramMessage, String)) -> Self {
+        Self {
+            chat_id: value.0.chat_id,
+            message_id: value.0.message_id,
+            error: value.1,
+        }
     }
 }

@@ -1,8 +1,9 @@
+use crate::error::DaemonError;
+use crate::telegram::TelegramMessage;
+
 use std::path::PathBuf;
 
 use sqlx::{SqlitePool, migrate::MigrateDatabase};
-
-use crate::error::DaemonError;
 
 #[derive(Clone, Debug)]
 pub struct Database {
@@ -42,6 +43,52 @@ impl Database {
         .bind(chat_id)
         .bind(message_id)
         .bind(jiff::Timestamp::now().as_second())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_expired(&self) -> Result<Vec<TelegramMessage>, DaemonError> {
+        const TWELVE_HOURS: i64 = 12 * 60 * 60;
+        let cutoff = jiff::Timestamp::now().as_second() - TWELVE_HOURS;
+
+        let rows = sqlx::query(
+            r#"
+            SELECT chat_id, message_id, sent_at
+            FROM telegram_messages
+            WHERE sent_at < ?
+            "#,
+        )
+        .bind(cutoff)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(TelegramMessage::from).collect())
+    }
+
+    pub async fn get_all(&self) -> Result<Vec<TelegramMessage>, DaemonError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT chat_id, message_id, sent_at
+            FROM telegram_messages
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(TelegramMessage::from).collect())
+    }
+
+    pub async fn delete_message(&self, chat_id: i64, message_id: i64) -> Result<(), DaemonError> {
+        sqlx::query(
+            r#"
+            DELETE FROM telegram_messages
+            WHERE chat_id = ? AND message_id = ?
+            "#,
+        )
+        .bind(chat_id)
+        .bind(message_id)
         .execute(&self.pool)
         .await?;
 

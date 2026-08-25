@@ -1,15 +1,48 @@
 use crate::error::TelegramError;
+
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use sqlx::sqlite::SqliteRow;
+use tabled::Tabled;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Tabled)]
+pub struct TelegramMessage {
+    pub chat_id: i64,
+    pub message_id: i64,
+    #[tabled(display = "display_time")]
+    pub sent_at: i64,
+}
+
+impl From<SqliteRow> for TelegramMessage {
+    fn from(row: SqliteRow) -> Self {
+        use sqlx::Row;
+        TelegramMessage {
+            chat_id: row.get("chat_id"),
+            message_id: row.get("message_id"),
+            sent_at: row.get("sent_at"),
+        }
+    }
+}
+
+fn display_time(timestamp: &i64) -> String {
+    use jiff::{Timestamp, tz::TimeZone};
+
+    let time = Timestamp::from_second(*timestamp)
+        .expect("jiff made this timestamp")
+        .to_zoned(TimeZone::system());
+
+    time.strftime("%A, %B %-d, %Y %H:%M:%S").to_string()
+}
 
 pub fn validate_api_response(response: Value) -> Result<Value, TelegramError> {
     match response["ok"].as_bool() {
         Some(true) => Ok(response),
 
         Some(false) => match response["description"].as_str() {
-            Some(why) => Err(TelegramError::API(why.into())),
+            Some(why) => Err(TelegramError::Api(why.into())),
             None => Err(TelegramError::Unknown),
         },
-        None => return Err(TelegramError::Unknown),
+        None => Err(TelegramError::Unknown),
     }
 }
 
