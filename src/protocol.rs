@@ -1,5 +1,3 @@
-use crate::error::ExpectExt;
-
 use serde::{Deserialize, Serialize};
 
 pub const PROTOCOL_VER_MAX: u8 = 1;
@@ -15,7 +13,8 @@ pub struct CommandProtocol {
 
 impl CommandProtocol {
     pub fn to_serialized(self) -> String {
-        let mut s = serde_json::to_string(&self).responsible_expect("should be infallible");
+        let mut s =
+            serde_json::to_string(&self).expect("CommandProtocol can always be serialized as JSON");
         s.push('\n');
         s
     }
@@ -65,7 +64,8 @@ pub struct ResponseProtocol {
 
 impl ResponseProtocol {
     pub fn to_serialized(self) -> String {
-        let mut s = serde_json::to_string(&self).responsible_expect("should be infallible");
+        let mut s = serde_json::to_string(&self)
+            .expect("ResponseProtocol can always be serialized as JSON");
         s.push('\n');
         s
     }

@@ -74,35 +74,3 @@ pub enum ClientError {
     #[error("unable to write to socket: {0}")]
     WriteFailure(#[source] std::io::Error),
 }
-
-pub trait ExpectExt<T> {
-    fn responsible_expect(self, message: &str) -> T;
-}
-
-impl<T, E: std::fmt::Debug> ExpectExt<T> for Result<T, E> {
-    #[track_caller]
-    fn responsible_expect(self, message: &str) -> T {
-        let location = Location::caller();
-
-        self.expect(&format!(
-            "Fatal: {message}, ({}:{},{})",
-            location.file(),
-            location.line(),
-            location.column()
-        ))
-    }
-}
-
-impl<T> ExpectExt<T> for Option<T> {
-    #[track_caller]
-    fn responsible_expect(self, message: &str) -> T {
-        let location = Location::caller();
-
-        self.expect(&format!(
-            "Fatal: {message}, ({}:{},{})",
-            location.file(),
-            location.line(),
-            location.column()
-        ))
-    }
-}

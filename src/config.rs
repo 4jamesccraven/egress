@@ -1,4 +1,4 @@
-use crate::error::{ConfigError, ExpectExt};
+use crate::error::ConfigError;
 
 use std::fs::read_to_string;
 use std::path::PathBuf;
@@ -10,7 +10,7 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
-    /// Who's leaving.
+    /// Who's leaving. Defaults to 'user'.
     pub user_name: Option<String>,
     /// A list of Telegram `chat_id`s to receive updates.
     pub targets: Vec<i64>,
@@ -61,7 +61,7 @@ impl Config {
     fn config_dir() -> PathBuf {
         if cfg!(debug_assertions) {
             dirs::config_dir()
-                .responsible_expect("XDG_CONFIG_HOME is not set")
+                .expect("XDG_CONFIG_HOME is not set")
                 .join("egress")
         } else {
             PathBuf::from("/etc/egress")

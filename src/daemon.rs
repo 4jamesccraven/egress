@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::database::Database;
-use crate::error::{DaemonError, ExpectExt};
+use crate::error::DaemonError;
 use crate::protocol::{CommandAction, CommandProtocol, PROTOCOL_VER_MAX, ResponseProtocol};
 use crate::telegram;
 
@@ -31,7 +31,7 @@ impl Daemon {
         let socket_path = Self::socket_path();
 
         if std::path::Path::new(&socket_path).exists() {
-            std::fs::remove_file(&socket_path).responsible_expect("unable to remove stale socket");
+            std::fs::remove_file(&socket_path)?;
         }
 
         UnixListener::bind(socket_path).map_err(|_| DaemonError::ConnectionFailed)
@@ -57,7 +57,7 @@ impl Daemon {
 
                 _ = tokio::signal::ctrl_c() => {
                     eprintln!("shutting down");
-                    std::fs::remove_file(Self::socket_path()).responsible_expect("could not remove socket");
+                    std::fs::remove_file(Self::socket_path())?;
                     break;
                 }
             }
@@ -124,6 +124,7 @@ impl Daemon {
         }
     }
 
+    /// Formats the departure message for the user.
     fn departure_message(&self) -> String {
         let now = jiff::Timestamp::now().to_zoned(TimeZone::system());
         let user = match &self.config.user_name {
@@ -158,11 +159,12 @@ impl Daemon {
     }
 
     /// Gets the path to the UNIX socket for the daemon.
+    #[inline]
     pub fn socket_path() -> PathBuf {
         if cfg!(debug_assertions) {
             dirs::runtime_dir()
                 .map(|p| p.join("egress.sock"))
-                .responsible_expect("XDG_RUNTIME_DIR not set")
+                .expect("XDG_RUNTIME_DIR not set")
         } else {
             PathBuf::from("/run/egress.sock")
         }

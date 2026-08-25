@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use sqlx::{SqlitePool, migrate::MigrateDatabase};
 
-use crate::error::{DaemonError, ExpectExt};
+use crate::error::DaemonError;
 
 #[derive(Clone, Debug)]
 pub struct Database {
@@ -51,7 +51,7 @@ impl Database {
     pub fn database_path() -> PathBuf {
         let dir = if cfg!(debug_assertions) {
             dirs::data_dir()
-                .responsible_expect("XDG_DATA_HOME is not set")
+                .expect("XDG_DATA_HOME is not set")
                 .join("egress")
         } else {
             PathBuf::from("/var/lib/egress")
