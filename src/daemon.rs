@@ -5,9 +5,13 @@ use crate::protocol::{CommandAction, CommandProtocol, ResponseData, ResponseProt
 use crate::telegram::{self, TelegramMessage};
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use axum::Json;
+use axum::extract::{Form, State};
 use jiff::ToSpan;
 use jiff::tz::TimeZone;
+use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 
@@ -46,12 +50,21 @@ impl Daemon {
 
     /// Runs the Daemon. Listens for socket and http connections.
     pub async fn run() -> Result<(), DaemonError> {
-        let daemon = Self::new().await?;
+        // Initialize the daemon
+        let daemon = Arc::new(Self::new().await?);
         eprintln!("Started egressd.");
 
+        // Run a pre-emptive purge to remove expired messages, and create a timer to do that on a
+        // set interval.
         daemon.auto_purge().await;
         let purge_timer = tokio::time::sleep(Self::until_next_purge());
         tokio::pin!(purge_timer);
+
+        // Initialize the http router and a tcp listener.
+        let router = Self::http_router(daemon.clone()).await;
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:50925").await?;
+        let http_server = axum::serve(listener, router).into_future();
+        tokio::pin!(http_server);
 
         loop {
             tokio::select! {
@@ -64,6 +77,11 @@ impl Daemon {
                             eprintln!("Warning: could not accept Unix socket connection: {error}");
                         }
                     }
+                }
+
+                result = &mut http_server => {
+                    result?;
+                    break;
                 }
 
                 _ = &mut purge_timer => {
@@ -118,10 +136,26 @@ impl Daemon {
         if cfg!(debug_assertions) {
             dirs::runtime_dir()
                 .map(|p| p.join("egress.sock"))
-                .expect("XDG_RUNTIME_DIR not set")
+                .expect("XDG_RUNTIME_DIR not se&t")
         } else {
             PathBuf::from("/run/egress.sock")
         }
+    }
+
+    async fn http_router(daemon: Arc<Self>) -> axum::Router {
+        use axum::routing::post;
+        axum::Router::new()
+            .route("/notify", post(Self::http_notify))
+            .with_state(daemon)
+    }
+
+    async fn http_notify(
+        State(daemon): State<Arc<Self>>,
+        Form(request): Form<HttpNotifyRequest>,
+    ) -> Json<ResponseProtocol> {
+        let _ = request.protocol_version;
+
+        Json(daemon.protocol_notify(request.source_id).await)
     }
 
     // -----------------------------------------------------------------------
@@ -320,4 +354,10 @@ impl Daemon {
         std::time::Duration::try_from(now.duration_until(&next))
             .expect("next purge time is after now")
     }
+}
+
+#[derive(Deserialize)]
+struct HttpNotifyRequest {
+    protocol_version: u8,
+    source_id: Option<String>,
 }

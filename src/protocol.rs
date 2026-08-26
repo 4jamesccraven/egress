@@ -76,7 +76,7 @@ impl ResponseProtocol {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(tag = "actiom")]
+#[serde(tag = "action")]
 pub enum ResponseData {
     NotifyLeft {
         success_count: usize,
@@ -96,7 +96,11 @@ pub enum ResponseData {
         /// Other errors.
         error: Option<String>,
     },
-    License(String),
+    License {
+        text: String,
+    },
+    /// For when a protocol that is invalid over HTTP is requested
+    HttpNotPermitted,
 }
 
 impl ResponseData {
