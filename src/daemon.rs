@@ -6,6 +6,7 @@ use crate::telegram::{self, TelegramMessage};
 
 use std::path::PathBuf;
 
+use jiff::ToSpan;
 use jiff::tz::TimeZone;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
@@ -23,7 +24,7 @@ impl Daemon {
     // Daemon Life Cycle
     // -----------------------------------------------------------------------
 
-    /// Initialises a new daemon. Not called externally; use `Daemon::run` instead.
+    /// Initializes a new daemon. Not called externally; use `Daemon::run` instead.
     async fn new() -> Result<Self, DaemonError> {
         Ok(Self {
             config: Config::load_config()?,
@@ -32,7 +33,7 @@ impl Daemon {
         })
     }
 
-    /// Initialises the local UNIX socket for the daemon.
+    /// Initializes the local UNIX socket for the daemon.
     fn init_socket() -> Result<UnixListener, DaemonError> {
         let socket_path = Self::socket_path();
 
@@ -48,6 +49,10 @@ impl Daemon {
         let daemon = Self::new().await?;
         eprintln!("Started egressd.");
 
+        daemon.auto_purge().await;
+        let purge_timer = tokio::time::sleep(Self::until_next_purge());
+        tokio::pin!(purge_timer);
+
         loop {
             tokio::select! {
                 result = daemon.socket.accept() => {
@@ -61,8 +66,17 @@ impl Daemon {
                     }
                 }
 
+                _ = &mut purge_timer => {
+                    daemon.auto_purge().await;
+
+                    // Reset the timer
+                    purge_timer.as_mut().reset(
+                        tokio::time::Instant::now() + Self::until_next_purge()
+                    );
+                }
+
                 _ = tokio::signal::ctrl_c() => {
-                    eprintln!("shutting down");
+                    eprintln!("\nshutting down");
                     std::fs::remove_file(Self::socket_path())?;
                     break;
                 }
@@ -255,5 +269,55 @@ impl Daemon {
         }
 
         success_count
+    }
+
+    /// Performs the purge action internally, without an external client.
+    ///
+    /// See [`Daemon::protocol_purge`] for more info.
+    async fn auto_purge(&self) {
+        let response = self.protocol_purge(false).await;
+        if !response.success {
+            eprintln!("warning: could not purge db: {}", response.to_serialized());
+            return;
+        }
+        match response.data {
+            ResponseData::Purge {
+                success_count,
+                failure: _,
+                error: _,
+            } => match success_count {
+                0 => eprintln!("purge info: no expired messages to purge."),
+                1 => eprintln!("purge info: one expired message purged."),
+                2.. => eprintln!("purge info: {success_count} expired messages purged."),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    /// Calculates the time until the next database purge.
+    ///
+    /// Purges occur every sixth hour of the day (i.e., 00:00, 06:00, 12:00, 18:00)
+    fn until_next_purge() -> std::time::Duration {
+        let now = jiff::Zoned::now();
+
+        let next_hour = ((now.hour() / 6) + 1) * 6;
+
+        let next = if next_hour < 24 {
+            now.with()
+                .hour(next_hour)
+                .minute(0)
+                .second(0)
+                .nanosecond(0)
+                .build()
+                .expect("valid purge time")
+        } else {
+            now.start_of_day()
+                .expect("current day has a start")
+                .checked_add(1.day())
+                .expect("next day is representable")
+        };
+
+        std::time::Duration::try_from(now.duration_until(&next))
+            .expect("next purge time is after now")
     }
 }
