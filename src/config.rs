@@ -11,27 +11,41 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     /// Who's leaving. Defaults to 'user'.
-    pub user_name: Option<String>,
+    #[serde(default = "default_user")]
+    pub user_name: String,
     /// A list of Telegram `chat_id`s to receive updates.
     pub targets: Vec<i64>,
     /// The bot token for use with Telegram's API.
     pub telegram_token: String,
+    /// How many hours a message should persist
+    #[serde(default = "default_expiry")]
+    pub expiry_hours: i64,
 }
 
 impl Config {
-    pub fn get() -> Self {
-        CONFIG
-            .get_or_init(|| match Self::load_config() {
-                Ok(cfg) => cfg,
-                Err(error) => {
-                    eprintln!("fatal: Config::get() called before configuration was successfully loaded: {error}");
-                    std::process::exit(1);
-                }
-            })
-            .clone()
+    /// Gets the configuration, panicking if it cannot be loaded.
+    ///
+    /// Use [`Config::load_config`] when configuration errors need to be handled.
+    pub fn get() -> &'static Self {
+        Self::load_config().unwrap_or_else(|error| {
+            panic!(
+                "fatal: Config::get() called before configuration was successfully loaded: {error}"
+            );
+        })
     }
 
-    pub fn load_config() -> Result<Self, ConfigError> {
+    /// Loads the user configuration from disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError::NotFound`] if no configuration file exists,
+    /// [`ConfigError::TooMany`] if both TOML and JSON files exist, or
+    /// relevant IO/serde errors if the file cannot be read or parsed.
+    pub fn load_config() -> Result<&'static Self, ConfigError> {
+        if let Some(cfg) = CONFIG.get() {
+            return Ok(cfg);
+        }
+
         let cfg_dir = match std::env::var("EGRESS_CONFIG_DIR") {
             Ok(path) => PathBuf::from(path),
             Err(_) => Self::config_dir(),
@@ -51,11 +65,14 @@ impl Config {
             (false, false) => return Err(ConfigError::NotFound),
         };
 
-        if use_toml {
+        let cfg = if use_toml {
             toml::from_str(&config_contents).map_err(ConfigError::from)
         } else {
             serde_json::from_str(&config_contents).map_err(ConfigError::from)
-        }
+        }?;
+
+        CONFIG.set(cfg).expect("could not already have been set");
+        Ok(CONFIG.get().expect("we just set it"))
     }
 
     fn config_dir() -> PathBuf {
@@ -67,4 +84,12 @@ impl Config {
             PathBuf::from("/etc/egress")
         }
     }
+}
+
+const fn default_expiry() -> i64 {
+    12
+}
+
+fn default_user() -> String {
+    "user".into()
 }

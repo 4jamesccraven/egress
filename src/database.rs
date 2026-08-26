@@ -49,9 +49,9 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_expired(&self) -> Result<Vec<TelegramMessage>, DaemonError> {
-        const TWELVE_HOURS: i64 = 12 * 60 * 60;
-        let cutoff = jiff::Timestamp::now().as_second() - TWELVE_HOURS;
+    pub async fn get_expired(&self, num_hours: i64) -> Result<Vec<TelegramMessage>, DaemonError> {
+        let hours = num_hours * 60 * 60;
+        let cutoff = jiff::Timestamp::now().as_second() - hours;
 
         let rows = sqlx::query(
             r#"

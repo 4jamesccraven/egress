@@ -13,7 +13,7 @@ use tokio::net::{UnixListener, UnixStream};
 /// The egress daemon (egressd), Responsible for accepting client requests and coordinating
 /// application services.
 pub struct Daemon {
-    config: Config,
+    config: &'static Config,
     socket: UnixListener,
     database: Database,
 }
@@ -137,8 +137,8 @@ impl Daemon {
 
     /// Handles the `notify_left` protocol.
     async fn protocol_notify(&self, source_id: Option<String>) -> ResponseProtocol {
-        let successful = self.notify_targets(&self.departure_message()).await;
         _ = source_id; // TODO: use this to customise notifications
+        let successful = self.notify_targets(&self.departure_message()).await;
 
         let total = self.config.targets.len();
         let success = successful == total;
@@ -163,7 +163,7 @@ impl Daemon {
         let messages = match if immediate {
             self.database.get_all().await
         } else {
-            self.database.get_expired().await
+            self.database.get_expired(self.config.expiry_hours).await
         } {
             Ok(messages) => messages,
             Err(error) => {
@@ -229,14 +229,11 @@ impl Daemon {
     /// Formats the departure message for the user.
     fn departure_message(&self) -> String {
         let now = jiff::Timestamp::now().to_zoned(TimeZone::system());
-        let user = match &self.config.user_name {
-            Some(name) => name,
-            None => "user",
-        };
 
         format!(
-            "[{}]: {user} is departing",
-            now.strftime("%A, %B %-d, %Y %H:%M:%S")
+            "[{}]: {} is departing",
+            now.strftime("%A, %B %-d, %Y %H:%M:%S"),
+            self.config.user_name
         )
     }
 
