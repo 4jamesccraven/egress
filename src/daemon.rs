@@ -195,7 +195,10 @@ impl Daemon {
         // Attempt to notify the admin.
         _ = telegram::send_message(
             self.config.admin_target,
-            &format!("Notification {admin_success_text}: {successful} messages sent"),
+            &format!(
+                "🛰️ {admin_success_text}: {successful} message{} sent",
+                if successful == 1 { "" } else { "s" }
+            ),
         )
         .await;
 
@@ -287,9 +290,17 @@ impl Daemon {
         let now = jiff::Timestamp::now().to_zoned(TimeZone::system());
 
         format!(
-            "[{}]: {} is departing",
-            now.strftime("%A, %B %-d, %Y %H:%M:%S"),
-            self.config.user_name
+            "<b>📡 L.E.A.V.E.</b>\n\
+            <i>Location & Egress Accountability Via Electronic surveillance</i>\n\
+            \n\
+            Local Time: {timestamp}\n\
+            {user} intends to leave the premises.\n\
+            \n\
+            <i>This message is automated and will be purged no sooner than {expiry} \
+            hours from now. Responses will not be monitored.</i>",
+            timestamp = now.strftime("%A, %B %-d, %Y %H:%M:%S"),
+            user = self.config.user_name,
+            expiry = self.config.expiry_hours,
         )
     }
 

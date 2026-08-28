@@ -67,7 +67,7 @@ async fn api_call(endpoint: &str, json: &Value) -> Result<Value, TelegramError> 
 }
 
 pub async fn send_message(chat_id: i64, text: &str) -> Result<i64, TelegramError> {
-    let body = json!({ "chat_id": chat_id, "text": text });
+    let body = json!({ "chat_id": chat_id, "text": text, "parse_mode": "HTML", });
     let response = api_call("sendMessage", &body).await?;
 
     let message_id = response["result"]["message_id"]
