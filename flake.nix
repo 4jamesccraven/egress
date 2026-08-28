@@ -27,6 +27,7 @@
 
             socat
             sqlite
+            just
           ];
 
           RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
@@ -34,19 +35,13 @@
       });
 
       packages = eachDefaultSystem (pkgs: {
-        default =
-          with pkgs;
-          let
-            manifest = (lib.importTOML ./Cargo.toml).package;
-          in
-          rustPlatform.buildRustPackage {
-            pname = manifest.name;
-            inherit (manifest) version;
-
-            src = ./.;
-
-            cargoLock.lockFile = ./Cargo.lock;
-          };
+        default = pkgs.callPackage ./package.nix { };
       });
+
+      overlays.default = _final: prev: {
+        egress = prev.callPackage ./package.nix { };
+      };
+
+      nixosModules.default = import ./nixos.nix;
     };
 }
