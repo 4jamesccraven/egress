@@ -19,6 +19,9 @@
         isSystemUser = true;
         group = "egress";
       };
+      users.groups.egress = { };
+
+      environment.systemPackages = [ pkgs.egress ];
 
       systemd.services.egressd = {
         description = "Egress Surveillance Daemon";
@@ -34,6 +37,9 @@
 
           RuntimeDirectory = "egress";
           RuntimeDirectoryMode = "0755";
+
+          StateDirectory = "egress";
+          StateDirectoryMode = "0750";
 
           Restart = "on-failure";
           RestartSec = 5;

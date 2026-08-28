@@ -45,7 +45,13 @@ impl Daemon {
             std::fs::remove_file(&socket_path)?;
         }
 
-        UnixListener::bind(socket_path).map_err(|_| DaemonError::ConnectionFailed)
+        let listener = UnixListener::bind(&socket_path)?;
+        std::fs::set_permissions(
+            &socket_path,
+            std::os::unix::fs::PermissionsExt::from_mode(0o660),
+        )?;
+
+        Ok(listener)
     }
 
     /// Runs the Daemon. Listens for socket and http connections.
