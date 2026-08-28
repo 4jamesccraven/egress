@@ -190,6 +190,14 @@ impl Daemon {
 
         let total = self.config.targets.len();
         let success = successful == total;
+        let admin_success_text = if success { "Success" } else { "Failure" };
+
+        // Attempt to notify the admin.
+        _ = telegram::send_message(
+            self.config.admin_target,
+            &format!("Notification {admin_success_text}: {successful} messages sent"),
+        )
+        .await;
 
         ResponseData::NotifyLeft {
             success_count: successful,

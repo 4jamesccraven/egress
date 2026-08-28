@@ -15,6 +15,8 @@ pub struct Config {
     pub user_name: String,
     /// A list of Telegram `chat_id`s to receive updates.
     pub targets: Vec<i64>,
+    /// A `chat_id` that receives updates/admin info.
+    pub admin_target: i64,
     /// The bot token for use with Telegram's API.
     pub telegram_token: String,
     /// How many hours a message should persist
