@@ -30,3 +30,9 @@ I used this as an excuse to try a couple of new technologies:
 Since I have to release this publicly to play nice with my flake, it has a license. It's
 GPL so that means you can't copy it without keeping the license. See the full license
 for details, the language here is without exception superseded by that file.
+
+License does not apply to the images under livery.
+
+## LLM Usage
+I consulted an LLM for design decisions and to generate the images under ./livery.
+Everything else (especially this README if you couldn't already tell). Was handwritten.
