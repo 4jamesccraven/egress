@@ -138,7 +138,7 @@ impl Daemon {
                 .map(|p| p.join("egress.sock"))
                 .expect("XDG_RUNTIME_DIR not se&t")
         } else {
-            PathBuf::from("/run/egress.sock")
+            PathBuf::from("/run/egress/egress.sock")
         }
     }
 
